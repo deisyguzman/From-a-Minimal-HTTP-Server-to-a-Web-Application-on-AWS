@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sequential Services</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <p class="eyebrow">NETWORKING LAB / PART 2</p>
+    <h1>A small server with a long memory.</h1>
+    <p class="intro">Three asynchronous requests. One deliberately sequential Java process.</p>
+    <img src="/network.svg" alt="A simple network diagram" class="network-image">
+    <div class="pixel-row" aria-label="Static image resources">
+      <img src="/pixel.png" alt="PNG resource sample">
+      <img src="/sample.jpg" alt="JPEG resource sample">
+    </div>
+    <section class="grid" aria-label="Services">
+      <form data-service="greeting" class="service-card">
+        <h2>Greeting</h2>
+        <label for="name">Your name</label>
+        <input id="name" name="name" required autocomplete="name">
+        <button type="submit">Say hello</button>
+      </form>
+      <form data-service="square" class="service-card">
+        <h2>Square</h2>
+        <label for="value">Integer</label>
+        <input id="value" name="value" type="number" step="1" required>
+        <button type="submit">Calculate</button>
+      </form>
+      <section class="service-card">
+        <h2>Server time</h2>
+        <p>Read the clock owned by the Java process.</p>
+        <button id="time" type="button">Ask the server</button>
+      </section>
+    </section>
+    <p id="status" class="status" role="status">Ready.</p>
+    <pre id="result" class="result" aria-live="polite">Responses appear here.</pre>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

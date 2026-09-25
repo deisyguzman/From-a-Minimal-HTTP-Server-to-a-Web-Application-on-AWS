@@ -1,0 +1,15 @@
+target/
+*.class
+*.log
+*.tmp
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+.env
+.env.*
+*.pem
+*.key
+.aws/
+credentials
