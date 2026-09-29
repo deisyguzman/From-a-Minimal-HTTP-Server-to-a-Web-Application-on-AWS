@@ -1,89 +1,222 @@
-# Sequential Web Application on AWS
+# From a Minimal HTTP Server to a Web Application on AWS
 
-Mini aplicación web para el laboratorio de redes de AREP. Un servidor Java basado en `ServerSocket` atiende una conexión completa antes de aceptar la siguiente. Sirve HTML, JavaScript, SVG, PNG y JPEG desde el classpath, y expone cuatro servicios JSON hardcoded.
+## Autor
 
-## Metáfora y arquitectura
+Deisy Lorena Guzmán Cabrales
 
-El sistema es una **ventanilla única**: el navegador entrega una solicitud HTTP, la ventanilla la clasifica por su ruta, devuelve un recurso estático o prepara un recibo JSON, y solo después atiende a la siguiente persona. La metáfora hace visible la restricción principal: JavaScript puede esperar de forma asíncrona en el navegador, pero la ventanilla sigue siendo secuencial.
+## 1. Descripción
+
+Esta aplicación es el resultado del laboratorio de redes de AREP. Extiende un servidor HTTP mínimo construido con Java hasta convertirlo en una pequeña aplicación web desplegada en una única instancia Amazon EC2.
+
+El servidor:
+
+- Atiende conexiones de forma secuencial, sin hilos ni concurrencia.
+- Sirve HTML, CSS, JavaScript, SVG, PNG y JPEG.
+- Expone servicios JSON hardcoded para saludo, cálculo, hora y salud.
+- Valida métodos, entradas y rutas inseguras.
+- Puede ejecutarse localmente y en una instancia EC2.
+
+La aplicación es una línea base educativa. No es un servidor HTTP de producción y no incluye autenticación, base de datos, balanceador, contenedores ni autoscaling.
+
+## 2. Metáfora del sistema
+
+El sistema funciona como una **ventanilla única**. El navegador entrega una solicitud HTTP; la ventanilla lee la ruta, devuelve un archivo o prepara una respuesta JSON y solo después atiende a la siguiente solicitud.
+
+La metáfora representa la decisión principal del laboratorio: JavaScript puede enviar solicitudes de forma asíncrona y mantener la página activa, pero el servidor Java sigue procesando una conexión a la vez.
+
+## 3. Arquitectura
 
 ```mermaid
 flowchart LR
-  B[Browser] -->|HTTP / fetch| G[Internet]
-  G --> SG[EC2 security group]
+  B[Browser] -->|HTTP and fetch| I[Internet]
+  I --> SG[EC2 Security Group]
   SG --> S[Sequential Java Server]
   S --> R[Static resources]
   S --> H[Hardcoded services]
 ```
 
-- El navegador carga `index.html`, `app.js`, estilos e imágenes mediante solicitudes separadas.
-- `app.js` usa `fetch`, valida entradas y actualiza solo las áreas de estado y resultado.
-- `Main` mantiene un `ServerSocket` abierto y procesa cada cliente en el hilo principal.
-- `RequestHandler` selecciona directamente los servicios `/api/greeting`, `/api/square`, `/api/time` y `/api/health`; las demás rutas buscan un recurso público.
-- `HttpResponse` escribe bytes, tipo MIME, estado y longitud exacta.
-- EC2 aporta el host remoto y el security group; no cambia la arquitectura de la aplicación.
+| Componente | Responsabilidad |
+|---|---|
+| Navegador | Carga recursos y muestra la interfaz. |
+| `app.js` | Envía solicitudes con `fetch` y actualiza el resultado sin recargar la página. |
+| `Main` | Abre el `ServerSocket`, acepta conexiones y procesa una conexión completa antes de aceptar otra. |
+| `HttpRequest` | Interpreta método, ruta y parámetros de consulta. |
+| `RequestHandler` | Selecciona servicios hardcoded o recursos estáticos. |
+| `HttpResponse` | Escribe estado, tipo MIME, longitud y cuerpo como bytes. |
+| EC2 Security Group | Permite SSH por el puerto `22` y tráfico de la aplicación por el puerto `35000`. |
+| EC2 | Proporciona el host remoto donde se ejecuta el mismo JAR probado localmente. |
 
-## Decisiones de diseño
+## 4. Decisiones de diseño
 
-El servidor permanece secuencial para observar la espera y establecer una línea base antes de introducir concurrencia. Las rutas son condiciones explícitas para que el flujo URL -> comportamiento sea visible. Los tipos se seleccionan por extensión y todos los cuerpos se envían como bytes. Las rutas con `..` o barras invertidas se rechazan antes de buscar recursos. El cliente es asíncrono para que la página permanezca interactiva mientras el servidor responde.
+### Servidor secuencial
 
-## Estructura
+El servidor no crea hilos ni utiliza un pool. El socket de escucha permanece abierto, pero cada socket de cliente se atiende completamente y se cierra antes de aceptar el siguiente. Esto permite observar la limitación de capacidad que se resolvería en una etapa posterior con concurrencia.
+
+### Rutas hardcoded
+
+Las rutas especiales se reconocen mediante condiciones directas. Esta decisión hace visible la relación entre URL y comportamiento, que es el objetivo del laboratorio. No se utiliza un framework de routing ni reflexión.
+
+### Recursos como bytes
+
+Todos los recursos se leen y envían como bytes. Esto permite calcular correctamente `Content-Length` y evita tratar imágenes PNG o JPEG como texto.
+
+### Seguridad
+
+El servidor solo acepta `GET`, valida parámetros, escapa valores antes de insertarlos en JSON y rechaza rutas con `..` o barras invertidas para impedir salir del área pública.
+
+### Cliente asíncrono
+
+El navegador utiliza `fetch` y `preventDefault()`. Mientras espera una respuesta muestra un estado de carga y, cuando responde el servidor, actualiza únicamente el área de resultado.
+
+## 5. Estructura del proyecto
 
 ```text
-src/main/java/edu/arep/web/  servidor, parser y respuestas
-src/main/resources/public/    HTML, JavaScript, CSS e imágenes
-src/test/java/edu/arep/web/   pruebas unitarias del contrato HTTP
+src/main/java/edu/arep/web/  Código del servidor HTTP
+src/main/resources/public/    HTML, CSS, JavaScript e imágenes
+src/test/java/edu/arep/web/   Pruebas automatizadas
+target/                        Artefactos generados por Maven, no se versiona
+docs/evidence/                 Capturas de la demostración final
 ```
 
-## Requisitos, instalación y build
+## 6. Requisitos
 
-- Java 17 o superior
-- Maven 3.9 o superior
-- Navegador moderno
+- Java 17 o superior.
+- Maven 3.9 o superior.
+- Navegador web moderno.
+- Cuenta AWS Academy y permisos para crear una instancia EC2.
+
+## 7. Instalación y construcción
 
 ```bash
-git clone <repository-url>
+git clone <URL_DEL_REPOSITORIO>
 cd From-a-Minimal-HTTP-Server-to-a-Web-Application-on-AWS
 mvn clean test
 mvn package
 ```
 
-El artefacto es `target/sequential-web-application-1.0-SNAPSHOT.jar` y contiene los recursos públicos. No requiere dependencias en tiempo de ejecución.
+El artefacto generado es:
 
-## Ejecución local
-
-El puerto predeterminado es `35000`; se puede cambiar con `PORT` o `--port`. El host predeterminado es `0.0.0.0`, necesario para EC2.
-
-```bash
-java -jar target/sequential-web-application-1.0-SNAPSHOT.jar --port 35000
+```text
+target/sequential-web-application-1.0-SNAPSHOT.jar
 ```
 
-Abra `http://localhost:35000/`. Detenga con `Ctrl+C`.
+El JAR contiene los recursos públicos y no necesita dependencias externas para ejecutarse.
 
-Servicios:
+## 8. Ejecución local
 
-| Ruta | Entrada | Éxito | Error |
-|---|---|---|---|
-| `/api/greeting?name=Ada` | `name` no vacío | JSON con saludo | `400` si falta |
-| `/api/square?value=7` | entero | JSON con `value` y `square` | `400` si no es entero |
-| `/api/time` | ninguna | JSON con hora del servidor | `405` si no es GET |
-| `/api/health` | ninguna | `{"status":"ok"}` | `405` si no es GET |
-
-Archivos ausentes producen `404`; métodos distintos de GET producen `405`; rutas inseguras producen `400`. El nombre se escapa antes de entrar al JSON.
-
-## Pruebas y evidencia
-
-Automatizadas: `mvn clean test`. Manualmente, revise DevTools > Network para confirmar solicitudes separadas de documento, script, imágenes y JSON, sus tipos y estados. Pruebe también `/missing.html`, `POST /api/time` y `/../pom.xml`. Para evidenciar la limitación secuencial, agregue temporalmente una espera al servicio, capture el timestamp de dos ventanas y muestre que la segunda conexión espera a la primera.
-
-## AWS EC2
-
-Use únicamente la cuenta, región, imagen y tamaño aprobados por el instructor. Cree una instancia Linux, permita SSH solo desde su IP si aplica y abra únicamente el puerto `35000` requerido por la práctica. Transfiera el JAR, instale Java 17 y ejecute:
+El puerto predeterminado es `35000`. El servidor escucha en `0.0.0.0`, por lo que también puede recibir conexiones desde EC2.
 
 ```bash
-java -jar sequential-web-application-1.0-SNAPSHOT.jar --host 0.0.0.0 --port 35000
+java -jar target/sequential-web-application-1.0-SNAPSHOT.jar --host 0.0.0.0 --port 35000
 ```
 
-Valide primero dentro de EC2 con `curl http://localhost:35000/api/health` y luego desde el navegador usando la IP pública. Para una ejecución administrada use el mecanismo aprobado (por ejemplo `systemd`), con logs en una ruta conocida. Nunca guarde claves, tokens o credenciales en Git. Antes de terminar la práctica detenga el proceso, termine la instancia, libere una Elastic IP si existe, elimine el security group cuando ya no esté en uso y revise costos.
+Abra:
 
-## Limitaciones, autor y reconocimiento
+```text
+http://localhost:35000/
+```
 
-No hay hilos, base de datos, autenticación, router general, balanceador ni autoscaling. Solo se admite GET y el servidor no es de producción. Autor: estudiante AREP. Reconocimiento: documentación oficial de Java, Maven y AWS EC2; asistencia de herramientas de desarrollo usada para revisar la implementación.
+Para detener el servidor, presione `Ctrl+C`.
+
+## 9. Servicios disponibles
+
+| Método | Ruta | Entrada | Respuesta exitosa | Error esperado |
+|---|---|---|---|---|
+| `GET` | `/api/greeting?name=Ada` | Nombre no vacío | JSON con saludo | `400` si falta `name` |
+| `GET` | `/api/square?value=7` | Número entero | JSON con valor y cuadrado | `400` si es inválido |
+| `GET` | `/api/time` | Ninguna | Hora actual del servidor | `405` si no es GET |
+| `GET` | `/api/health` | Ninguna | `{"status":"ok"}` | `405` si no es GET |
+
+Además:
+
+- Un archivo inexistente produce `404 Not Found`.
+- Un método diferente de `GET` produce `405 Method Not Allowed`.
+- Una ruta insegura produce `400 Bad Request`.
+- Los recursos tienen tipos MIME correctos: HTML, JavaScript, PNG, JPEG y JSON.
+
+## 10. Pruebas automatizadas
+
+Ejecute:
+
+```bash
+mvn clean test
+```
+
+Las pruebas verifican el parser HTTP, los servicios, la validación de parámetros, el escape JSON, los tipos MIME, los recursos binarios, los archivos inexistentes y el rechazo de path traversal.
+
+## 11. Despliegue en AWS EC2
+
+### 11.1. Configuración de red
+
+Se utiliza una sola instancia EC2 con una IP pública. El Security Group permite:
+
+| Regla | Puerto | Fuente |
+|---|---:|---|
+| SSH | `22` | IP pública del estudiante o `My IP` |
+| Custom TCP | `35000` | IP pública del estudiante o rango aprobado por el instructor |
+
+El puerto `22` es únicamente para administración. El puerto `35000` es para la aplicación.
+
+### 11.2. Instalar Java en EC2
+
+Para Amazon Linux:
+
+```bash
+sudo dnf install -y java-17-amazon-corretto
+java -version
+```
+
+### 11.3. Transferir y ejecutar
+
+Desde PowerShell local:
+
+```powershell
+scp -i "C:\ruta\arep-lab-key.pem" `
+  "target\sequential-web-application-1.0-SNAPSHOT.jar" `
+  ec2-user@<DNS_PUBLICO_EC2>:/home/ec2-user/
+```
+
+En la instancia:
+
+```bash
+java -jar /home/ec2-user/sequential-web-application-1.0-SNAPSHOT.jar \
+  --host 0.0.0.0 \
+  --port 35000
+```
+
+La aplicación remota se prueba en:
+
+```text
+http://<IP_PUBLICA_EC2>:35000/
+```
+
+La IP pública puede cambiar si la instancia se detiene y se inicia nuevamente. Por eso se debe copiar la dirección actual desde la consola de EC2.
+
+### 11.4. Validación desde la instancia
+
+```bash
+curl -i http://localhost:35000/api/health
+curl -i http://localhost:35000/api/greeting?name=Ada
+curl -i http://localhost:35000/api/square?value=7
+```
+
+## 12. Evidencias de la entrega
+
+![alt text](img/image.png)
+
+![alt text](img/image-1.png)
+
+![alt text](img/image-2.png)
+
+![alt text](imgimage-3.png)
+
+![alt text](img/image-4.png)
+
+![alt text](img/image-5.png)
+
+![alt text](img/image-6.png)
+
+![alt text](img/image-7.png)
+
+![alt text](img/image-8.png)
+
